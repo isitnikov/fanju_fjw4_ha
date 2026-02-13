@@ -1,0 +1,18 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "FanJu FJW4",
+        "description": "Login using your EmaxLife / WeatherSense account",
+        "data": {
+          "username": "Email",
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "auth_failed": "Authentication failed",
+      "unknown": "Unknown error"
+    }
+  }
+}
