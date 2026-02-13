@@ -72,3 +72,23 @@ class FanJuSensor(CoordinatorEntity[FanJuCoordinator], SensorEntity):
         if self._desc.sensor_type == SENSOR_TEMPERATURE:
             return round(f_to_c(float(val)), 2)
         return float(val)
+
+
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
+
+from .api import FanJuApi
+from .coordinator import FanJuCoordinator
+from .const import CONF_USERNAME, CONF_PASSWORD, CONF_POLLING_INTERVAL, DEFAULT_POLLING_INTERVAL
+
+
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities) -> None:
+    session = async_get_clientsession(hass)
+    api = FanJuApi(session, entry.data[CONF_USERNAME], entry.data[CONF_PASSWORD])
+
+    interval = entry.options.get(CONF_POLLING_INTERVAL, DEFAULT_POLLING_INTERVAL)
+    coordinator = FanJuCoordinator(hass, api, interval)
+    await coordinator.async_config_entry_first_refresh()
+
+    async_add_entities([FanJuSensor(coordinator, d) for d in SENSORS])
