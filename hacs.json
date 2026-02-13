@@ -1,0 +1,7 @@
+{
+  "name": "FanJu FJW4 Weather Station",
+  "content_in_root": false,
+  "domains": ["fanju_fjw4"],
+  "iot_class": ["Cloud Polling"],
+  "country": ["CN"]
+}
