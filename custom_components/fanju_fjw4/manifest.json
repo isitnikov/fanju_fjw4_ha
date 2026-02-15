@@ -1,7 +1,7 @@
 {
   "domain": "fanju_fjw4",
   "name": "FanJu FJW4 Weather Station",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "documentation": "https://github.com/isitnikov/fanju_fjw4_ha",
   "issue_tracker": "https://github.com/isitnikov/fanju_fjw4_ha/issues",
   "config_flow": true,
