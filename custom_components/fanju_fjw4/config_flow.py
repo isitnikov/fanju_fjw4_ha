@@ -20,7 +20,7 @@ class FanJuConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
     async def async_step_user(self, user_input=None):
-        errors = {}
+        errors: dict[str, str] = {}
 
         if user_input is not None:
             session = async_get_clientsession(self.hass)
@@ -56,8 +56,8 @@ class FanJuConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-    @staticmethod
-    def async_get_options_flow(config_entry):
+    # ❗ НЕ staticmethod. Саме так, як очікує Home Assistant
+    def async_get_options_flow(self, config_entry):
         return FanJuOptionsFlowHandler(config_entry)
 
 
