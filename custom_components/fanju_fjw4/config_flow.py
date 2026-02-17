@@ -3,24 +3,17 @@ from __future__ import annotations
 import voluptuous as vol
 
 from homeassistant import config_entries
-from homeassistant.config_entries import OptionsFlow
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import FanJuApi, FanJuAuthError
-from .const import (
-    DOMAIN,
-    CONF_USERNAME,
-    CONF_PASSWORD,
-    CONF_POLLING_INTERVAL,
-    DEFAULT_POLLING_INTERVAL,
-)
+from .const import DOMAIN, CONF_USERNAME, CONF_PASSWORD
 
 
 class FanJuConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
     async def async_step_user(self, user_input=None):
-        errors: dict[str, str] = {}
+        errors = {}
 
         if user_input is not None:
             session = async_get_clientsession(self.hass)
@@ -39,10 +32,7 @@ class FanJuConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             else:
                 return self.async_create_entry(
                     title="FanJu FJW4 Weather Station",
-                    data={
-                        CONF_USERNAME: user_input[CONF_USERNAME],
-                        CONF_PASSWORD: user_input[CONF_PASSWORD],
-                    },
+                    data=user_input,
                 )
 
         return self.async_show_form(
@@ -54,35 +44,4 @@ class FanJuConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 }
             ),
             errors=errors,
-        )
-
-    # ❗ НЕ staticmethod. Саме так, як очікує Home Assistant
-    def async_get_options_flow(self, config_entry):
-        return FanJuOptionsFlowHandler(config_entry)
-
-
-class FanJuOptionsFlowHandler(OptionsFlow):
-    def __init__(self, config_entry):
-        self.config_entry = config_entry
-
-    async def async_step_init(self, user_input=None):
-        if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
-
-        return self.async_show_form(
-            step_id="init",
-            data_schema=vol.Schema(
-                {
-                    vol.Optional(
-                        CONF_POLLING_INTERVAL,
-                        default=self.config_entry.options.get(
-                            CONF_POLLING_INTERVAL,
-                            DEFAULT_POLLING_INTERVAL,
-                        ),
-                    ): vol.All(
-                        vol.Coerce(int),
-                        vol.Range(min=30, max=3600),
-                    ),
-                }
-            ),
         )
