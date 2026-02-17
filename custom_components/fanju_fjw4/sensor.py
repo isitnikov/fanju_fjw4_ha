@@ -3,53 +3,82 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from homeassistant.components.sensor import SensorEntity, SensorDeviceClass
+from homeassistant.components.sensor import (
+    SensorEntity,
+    SensorEntityDescription,
+    SensorDeviceClass,
+)
 from homeassistant.const import UnitOfTemperature, PERCENTAGE
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import SENSOR_TEMPERATURE, SENSOR_HUMIDITY, DOMAIN
 from .coordinator import FanJuCoordinator
+from .const import DOMAIN, SENSOR_TEMPERATURE, SENSOR_HUMIDITY
 
 
-def f_to_c(f: float) -> float:
-    return (f - 32.0) * 5.0 / 9.0  # як у плагіні  [oai_citation:11‡GitHub](https://raw.githubusercontent.com/slavvka/homebridge-fanju-fjw4/master/src/weather-station.ts)
+def f_to_c(value: float) -> float:
+    return round((value - 32.0) * 5.0 / 9.0, 2)
 
 
 @dataclass(frozen=True)
-class FanJuSensorDesc:
-    key: str
-    name: str
-    sensor_type: int
-    channel: int
-    device_class: SensorDeviceClass | None
-    unit: str | None
+class FanJuSensorDescription(SensorEntityDescription):
+    sensor_type: int = 0
+    channel: int = 0
 
 
-SENSORS: list[FanJuSensorDesc] = [
-    FanJuSensorDesc("indoor_temp", "Indoor Temperature", SENSOR_TEMPERATURE, 0, SensorDeviceClass.TEMPERATURE, UnitOfTemperature.CELSIUS),
-    FanJuSensorDesc("outdoor_temp", "Outdoor Temperature", SENSOR_TEMPERATURE, 1, SensorDeviceClass.TEMPERATURE, UnitOfTemperature.CELSIUS),
-    FanJuSensorDesc("indoor_hum", "Indoor Humidity", SENSOR_HUMIDITY, 0, SensorDeviceClass.HUMIDITY, PERCENTAGE),
-    FanJuSensorDesc("outdoor_hum", "Outdoor Humidity", SENSOR_HUMIDITY, 1, SensorDeviceClass.HUMIDITY, PERCENTAGE),
-]
+SENSOR_DESCRIPTIONS: tuple[FanJuSensorDescription, ...] = (
+    FanJuSensorDescription(
+        key="indoor_temperature",
+        name="Indoor Temperature",
+        device_class=SensorDeviceClass.TEMPERATURE,
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        sensor_type=SENSOR_TEMPERATURE,
+        channel=0,
+    ),
+    FanJuSensorDescription(
+        key="outdoor_temperature",
+        name="Outdoor Temperature",
+        device_class=SensorDeviceClass.TEMPERATURE,
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        sensor_type=SENSOR_TEMPERATURE,
+        channel=1,
+    ),
+    FanJuSensorDescription(
+        key="indoor_humidity",
+        name="Indoor Humidity",
+        device_class=SensorDeviceClass.HUMIDITY,
+        native_unit_of_measurement=PERCENTAGE,
+        sensor_type=SENSOR_HUMIDITY,
+        channel=0,
+    ),
+    FanJuSensorDescription(
+        key="outdoor_humidity",
+        name="Outdoor Humidity",
+        device_class=SensorDeviceClass.HUMIDITY,
+        native_unit_of_measurement=PERCENTAGE,
+        sensor_type=SENSOR_HUMIDITY,
+        channel=1,
+    ),
+)
 
 
 class FanJuSensor(CoordinatorEntity[FanJuCoordinator], SensorEntity):
-    def __init__(self, coordinator: FanJuCoordinator, desc: FanJuSensorDesc) -> None:
+    entity_description: FanJuSensorDescription
+
+    def __init__(
+        self,
+        coordinator: FanJuCoordinator,
+        description: FanJuSensorDescription,
+    ) -> None:
         super().__init__(coordinator)
-        self.entity_description = None
-        self._desc = desc
+        self.entity_description = description
 
-        dev = (coordinator.data or {}).get("device") or {}
-        sn = dev.get("sn") or dev.get("mac") or "fanju_fjw4"
+        device = coordinator.device or {}
+        sn = device.get("sn") or device.get("mac") or "fanju_fjw4"
 
-        self._attr_unique_id = f"{sn}_{desc.key}"
-        self._attr_name = desc.name
-        self._attr_device_class = desc.device_class
-        self._attr_native_unit_of_measurement = desc.unit
-
+        self._attr_unique_id = f"{sn}_{description.key}"
         self._attr_device_info = {
             "identifiers": {(DOMAIN, sn)},
-            "name": dev.get("alias") or "FanJu FJW4",
+            "name": device.get("alias") or "FanJu FJW4",
             "manufacturer": "FanJu",
             "model": "FJW4",
         }
@@ -59,36 +88,27 @@ class FanJuSensor(CoordinatorEntity[FanJuCoordinator], SensorEntity):
         data: dict[str, Any] = (self.coordinator.data or {}).get("realtime") or {}
         sensor_datas = data.get("sensorDatas") or []
 
-        match = None
-        for d in sensor_datas:
-            if d.get("type") == self._desc.sensor_type and d.get("channel") == self._desc.channel:
-                match = d
-                break
+        for item in sensor_datas:
+            if (
+                item.get("type") == self.entity_description.sensor_type
+                and item.get("channel") == self.entity_description.channel
+            ):
+                value = item.get("curVal")
+                if value is None:
+                    return None
 
-        if not match or match.get("curVal") is None:
-            return None
+                if self.entity_description.sensor_type == SENSOR_TEMPERATURE:
+                    return f_to_c(float(value))
 
-        val = match["curVal"]
-        if self._desc.sensor_type == SENSOR_TEMPERATURE:
-            return round(f_to_c(float(val)), 2)
-        return float(val)
+                return float(value)
 
-
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
-
-from .api import FanJuApi
-from .coordinator import FanJuCoordinator
-from .const import CONF_USERNAME, CONF_PASSWORD, CONF_POLLING_INTERVAL, DEFAULT_POLLING_INTERVAL
+        return None
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities) -> None:
-    session = async_get_clientsession(hass)
-    api = FanJuApi(session, entry.data[CONF_USERNAME], entry.data[CONF_PASSWORD])
+async def async_setup_entry(hass, entry, async_add_entities) -> None:
+    coordinator: FanJuCoordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
 
-    interval = entry.options.get(CONF_POLLING_INTERVAL, DEFAULT_POLLING_INTERVAL)
-    coordinator = FanJuCoordinator(hass, api, interval)
-    await coordinator.async_config_entry_first_refresh()
-
-    async_add_entities([FanJuSensor(coordinator, d) for d in SENSORS])
+    async_add_entities(
+        FanJuSensor(coordinator, description)
+        for description in SENSOR_DESCRIPTIONS
+    )
